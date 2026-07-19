@@ -1,0 +1,447 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sector Rotation Monitor</title>
+<style>
+  :root{
+    --bg:#070A11; --panel:#0F1524; --panel-2:#0B111C; --line:#1B2434; --line-soft:#141C2A;
+    --text:#E9EEF7; --muted:#8797B0; --muted-2:#54627D;
+    --lead:#2FBF71; --weak:#E0A72E; --lag:#E4536A; --improve:#5B8DEF;
+    --lead-bg:rgba(47,191,113,.09); --weak-bg:rgba(224,167,46,.09);
+    --lag-bg:rgba(228,83,106,.09); --improve-bg:rgba(91,141,239,.09);
+    --demand:#34D399; --price:#F45B7A; --rot:#E7B84B; --base:#7FA6E8;
+    --accent:#6EA8FE;
+    --mono:"SFMono-Regular","JetBrains Mono","Roboto Mono",ui-monospace,monospace;
+    --sans:"Inter",-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 500px at 80% -10%,#0E1626 0%,var(--bg) 60%);color:var(--text);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1200px;margin:0 auto;padding:18px 20px 60px}
+
+  /* ---- top nav ---- */
+  .top{display:flex;align-items:center;gap:18px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:20px}
+  .brand{display:flex;align-items:center;gap:11px}
+  .logo{width:32px;height:32px;border-radius:9px;background:conic-gradient(from 45deg,var(--lead),var(--weak),var(--lag),var(--improve),var(--lead));position:relative}
+  .logo::after{content:"";position:absolute;inset:9px;background:var(--bg);border-radius:3px}
+  .brand h1{font-size:16px;font-weight:650;margin:0;letter-spacing:-.01em}
+  .brand .tl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--muted-2);text-transform:uppercase;margin-top:1px}
+  nav{display:flex;gap:4px;margin-left:8px}
+  nav button{font-size:13px;font-weight:600;color:var(--muted);background:transparent;border:0;border-radius:8px;padding:8px 14px;cursor:pointer;transition:.12s}
+  nav button:hover{color:var(--text);background:var(--panel-2)}
+  nav button.on{color:var(--text);background:var(--panel);box-shadow:inset 0 -2px 0 var(--accent)}
+  .spacer{flex:1}
+  .datachip{font-family:var(--mono);font-size:10.5px;padding:5px 11px;border-radius:20px;border:1px solid var(--line);color:var(--muted);display:flex;gap:7px;align-items:center}
+  .dot-s{width:7px;height:7px;border-radius:50%}
+
+  .view{display:none}.view.on{display:block}
+  .card{background:linear-gradient(180deg,var(--panel) 0%,var(--panel-2) 100%);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
+  .card h2{font-size:14px;font-weight:650;margin:0 0 4px}
+  .card .desc{font-size:11.5px;color:var(--muted);margin:0 0 12px;line-height:1.5}
+  svg{display:block;width:100%;height:auto}
+
+  /* ---- monitor ---- */
+  .regime{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+  .chip{font-family:var(--mono);font-size:11px;padding:6px 11px;border-radius:20px;border:1px solid var(--line);background:var(--panel-2);color:var(--muted);display:flex;gap:7px;align-items:center}
+  .chip b{color:var(--text);font-weight:600}
+  .mgrid{display:grid;grid-template-columns:1.55fr 1fr;gap:16px}
+  @media(max-width:900px){.mgrid{grid-template-columns:1fr}}
+  .rrg-tools{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+  .playbtn{font-family:var(--mono);font-size:12px;color:var(--text);background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:7px 14px;cursor:pointer;transition:.12s}
+  .playbtn:hover{border-color:var(--accent)}
+  .weekbadge{font-family:var(--mono);font-size:11px;color:var(--muted);margin-left:auto}
+  .slider{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;color:var(--muted-2)}
+  input[type=range]{accent-color:var(--accent);width:80px}
+  .qlabel{font-family:var(--mono);font-size:10px;letter-spacing:.1em;font-weight:600;text-transform:uppercase}
+  .axis{stroke:var(--line);stroke-width:1}
+  .axis-mid{stroke:var(--muted-2);stroke-width:1;stroke-dasharray:2 3;opacity:.5}
+  .grid-l{stroke:var(--line-soft);stroke-width:1}
+  .tick{fill:var(--muted-2);font-family:var(--mono);font-size:9px}
+  .trail{fill:none;stroke-width:1.4;opacity:.35}
+  .node{stroke:var(--bg);stroke-width:1.5;cursor:pointer}
+  .node-lbl{font-family:var(--mono);font-size:9.5px;font-weight:600;pointer-events:none}
+  .alert{display:flex;gap:10px;align-items:flex-start;padding:10px;border-radius:9px;border:1px solid var(--line);background:var(--panel-2);margin-bottom:8px}
+  .alert .bar{width:3px;align-self:stretch;border-radius:3px;flex-shrink:0}
+  .alert .t{font-size:12.5px;font-weight:600;display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+  .alert .t .tag2{font-family:var(--mono);font-size:9.5px;padding:2px 6px;border-radius:4px;font-weight:600}
+  .alert .m{font-size:11px;color:var(--muted);margin-top:3px;font-family:var(--mono)}
+  .empty{font-size:12px;color:var(--muted-2);text-align:center;padding:24px 0;font-family:var(--mono)}
+  .series{fill:none;stroke-width:1.5;opacity:.9;transition:opacity .12s}
+  .series.dim{opacity:.1}
+  .zeroline{stroke:var(--muted-2);stroke-dasharray:3 3;opacity:.5;stroke-width:1}
+  .grln{stroke:var(--line-soft);stroke-width:1}
+  .ltick{fill:var(--muted-2);font-family:var(--mono);font-size:9.5px}
+  .rtag rect{rx:3}.rtag text{font-family:var(--mono);font-size:9.5px;font-weight:600;fill:#080B12}
+  .full{margin-top:16px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:right;font-family:var(--mono);font-size:10px;letter-spacing:.05em;color:var(--muted-2);text-transform:uppercase;padding:8px 10px;border-bottom:1px solid var(--line);font-weight:500;cursor:pointer}
+  th:first-child,td:first-child{text-align:left}
+  td{padding:9px 10px;border-bottom:1px solid var(--line-soft);font-family:var(--mono)}
+  tr:last-child td{border-bottom:0}
+  .qpill{font-size:9.5px;padding:2px 7px;border-radius:20px;font-weight:600;font-family:var(--mono)}
+  .num-pos{color:var(--lead)}.num-neg{color:var(--lag)}
+
+  /* ---- brief ---- */
+  .masthead{display:flex;align-items:flex-start;gap:16px;justify-content:space-between;flex-wrap:wrap;margin-bottom:20px}
+  .eyebrow{display:inline-block;font-size:13px;font-weight:600;padding:6px 14px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2)}
+  .issue{font-family:var(--mono);font-size:12.5px;color:var(--muted);font-weight:600}
+  h1.head{font-size:clamp(22px,3.2vw,36px);line-height:1.3;font-weight:750;margin:14px 0 0;letter-spacing:-.01em}
+  h1.head em{font-style:normal;color:var(--rot)}
+  .bcols{display:grid;grid-template-columns:1.32fr 1fr;gap:20px}
+  @media(max-width:920px){.bcols{grid-template-columns:1fr}}
+  .bcard{background:linear-gradient(180deg,var(--panel) 0%,var(--panel-2) 100%);border:1px solid var(--line);border-radius:16px;padding:20px 22px}
+  .bcard + .bcard{margin-top:16px}
+  .bcard h2{font-size:16px;font-weight:650;margin:0 0 16px}
+  .concl{display:flex;gap:14px;padding:13px 0;border-top:1px solid var(--line-soft)}
+  .concl:first-of-type{border-top:0;padding-top:2px}
+  .btag{flex-shrink:0;min-width:60px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#08101c;padding:0 10px}
+  .btag.demand{background:var(--demand)} .btag.price{background:var(--price)} .btag.rot{background:var(--rot)}
+  .concl p{margin:2px 0 0;font-size:14px;line-height:1.6;color:#DCE4F0}
+  .btbl{width:100%;border-collapse:collapse;margin-top:16px;font-size:13px}
+  .btbl th{cursor:default}
+  .btbl td{font-family:var(--sans)}
+  .btbl .num{font-family:var(--mono);font-weight:700;text-align:right}
+  .btbl .read{color:var(--muted);font-size:12.5px}
+  .note{margin-top:16px;padding:13px 15px;border-left:3px solid var(--rot);background:rgba(231,184,75,.06);border-radius:0 8px 8px 0;font-size:12.5px;line-height:1.6;color:#D8E0EC}
+  .note b{color:var(--text)}
+  .scen{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  @media(max-width:520px){.scen{grid-template-columns:1fr}}
+  .scenbox{border:1px solid var(--line);border-radius:12px;padding:14px 12px;background:var(--panel-2);position:relative;overflow:hidden}
+  .scenbox::before{content:"";position:absolute;top:0;left:0;right:0;height:3px}
+  .scenbox.base::before{background:var(--base)} .scenbox.bull::before{background:var(--lead)} .scenbox.bear::before{background:var(--lag)}
+  .scenbox .k{font-family:var(--mono);font-size:10.5px;color:var(--muted-2);letter-spacing:.05em;text-transform:uppercase}
+  .scenbox .v{font-size:17px;font-weight:750;margin:5px 0 8px}
+  .scenbox.base .v{color:var(--base)} .scenbox.bull .v{color:var(--lead)} .scenbox.bear .v{color:var(--lag)}
+  .scenbox .d{font-size:11.5px;line-height:1.55;color:var(--muted)}
+  .evt{display:flex;gap:14px;padding:12px 0;border-top:1px solid var(--line-soft)}
+  .evt:first-of-type{border-top:0;padding-top:2px}
+  .evt .date{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--rot);flex-shrink:0;width:40px}
+  .evt .txt{font-size:13px;line-height:1.55;color:#DCE4F0}
+  .evt .txt b{color:var(--text)}
+  .riskbox{border:1px solid rgba(228,83,106,.35);border-radius:12px;overflow:hidden}
+  .riskbox .rh{background:rgba(228,83,106,.12);padding:11px 15px;font-weight:700;font-size:13.5px;color:#FCC;border-left:4px solid var(--lag)}
+  .riskbox .rb{padding:13px 15px;font-size:12.5px;line-height:1.62;color:var(--muted)}
+  .riskbox .rb b{color:var(--text)}
+  .foot{margin-top:22px;color:var(--muted-2);font-size:10.5px;line-height:1.7;font-family:var(--mono)}
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <div class="brand">
+      <div class="logo"></div>
+      <div><h1>Sector Rotation Monitor</h1><div class="tl">Trend Reversal · RRG · Weekly Brief</div></div>
+    </div>
+    <nav>
+      <button data-v="monitor" class="on">ローテーション監視</button>
+      <button data-v="brief">週次ブリーフ</button>
+      <button data-v="board">スコアボード</button>
+    </nav>
+    <div class="spacer"></div>
+    <div class="datachip" id="datachip"><span class="dot-s" style="background:var(--muted-2)"></span>読み込み中…</div>
+  </div>
+
+  <!-- ============ MONITOR ============ -->
+  <div class="view on" id="v-monitor">
+    <div class="regime" id="regime"></div>
+    <div class="mgrid">
+      <div class="card">
+        <h2>相対ローテーショングラフ（RRG）</h2>
+        <p class="desc">横軸＝相対力、縦軸＝相対モメンタム(対TOPIX)。業種は中心を基準に<b>時計回り</b>に循環。尾は過去の軌跡。</p>
+        <div class="rrg-tools">
+          <button class="playbtn" id="play">▶ 再生</button>
+          <div class="slider">尾 <input type="range" id="tail" min="1" max="12" value="6"><span id="taillen">6w</span></div>
+          <div class="weekbadge" id="weekbadge"></div>
+        </div>
+        <svg id="rrg" viewBox="0 0 560 520" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+      <div class="card">
+        <h2>トレンド転換アラート</h2>
+        <p class="desc">直近1週で象限をまたいだ業種。<b style="color:var(--improve)">Improving入り</b>＝底打ち初動、<b style="color:var(--weak)">Weakening入り</b>＝失速初動。</p>
+        <div id="alerts"></div>
+      </div>
+    </div>
+    <div class="card full">
+      <h2>相対力チャート（TOPIX比・26週正規化）</h2>
+      <p class="desc">上向き＝資金流入。凡例クリックで表示切替。</p>
+      <svg id="lines" viewBox="0 0 1160 380" preserveAspectRatio="xMidYMid meet"></svg>
+      <div id="lg" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:3px 12px;margin-top:12px"></div>
+    </div>
+  </div>
+
+  <!-- ============ BRIEF ============ -->
+  <div class="view" id="v-brief">
+    <div class="masthead">
+      <div><span class="eyebrow">来週の展望</span><h1 class="head" id="b-headline"></h1></div>
+      <div class="issue" id="b-issue"></div>
+    </div>
+    <div class="bcols">
+      <div>
+        <div class="bcard">
+          <h2 id="b-concl-title"></h2>
+          <div id="b-conclusions"></div>
+          <table class="btbl">
+            <thead><tr><th style="color:var(--rot);text-align:left">直近1週の動き</th><th>等ウェイト</th><th>時価総額ウェイト</th><th style="text-align:left">読み方</th></tr></thead>
+            <tbody id="b-tbl"></tbody>
+          </table>
+          <div class="note" id="b-note"></div>
+        </div>
+      </div>
+      <div>
+        <div class="bcard"><h2>来週のシナリオ</h2><div class="scen" id="b-scen"></div></div>
+        <div class="bcard"><h2 id="b-evt-title"></h2><div id="b-events"></div></div>
+        <div class="bcard" style="border-color:rgba(228,83,106,.25)"><h2>リスクシナリオ</h2>
+          <div class="riskbox"><div class="rh" id="b-risk-h"></div><div class="rb" id="b-risk-b"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ BOARD ============ -->
+  <div class="view" id="v-board">
+    <div class="card">
+      <h2>業種スコアボード</h2>
+      <p class="desc">RRG座標・象限・相対リターン。列見出しクリックで並べ替え。</p>
+      <table id="tbl"><thead><tr>
+        <th data-k="name">業種</th><th data-k="quad">象限</th>
+        <th data-k="ratio">RS-Ratio</th><th data-k="mom">RS-Mom</th>
+        <th data-k="r1">1週(相対)</th><th data-k="r4">4週(相対)</th><th data-k="r13">13週(相対)</th>
+      </tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+// ================= 共通ユーティリティ =================
+const PALETTE=["#F59E0B","#EC4899","#F472B6","#22C55E","#84CC16","#38BDF8","#60A5FA","#94A3B8","#2DD4BF","#FB7185","#64748B","#14B8A6","#3B82F6","#A78BFA","#C084FC","#FBBF24"];
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function smaNull(arr,w){const o=[];for(let i=0;i<arr.length;i++){let s=0,c=0;for(let j=i-w+1;j<=i;j++){if(j>=0&&arr[j]!=null){s+=arr[j];c++;}}o.push(c===w?s/w:null);}return o;}
+function quad(x,y){if(x==null||y==null)return null;if(x>=100&&y>=100)return"Leading";if(x>=100&&y<100)return"Weakening";if(x<100&&y<100)return"Lagging";return"Improving";}
+const QHEX={Leading:"#2FBF71",Weakening:"#E0A72E",Lagging:"#E4536A",Improving:"#5B8DEF"};
+const QBG={Leading:"var(--lead-bg)",Weakening:"var(--weak-bg)",Lagging:"var(--lag-bg)",Improving:"var(--improve-bg)"};
+const $=id=>document.getElementById(id);
+const W=10; // 平滑化窓(週)
+let DATA=[], dates=[], N=0, isLive=false, briefTable=null;
+
+// ================= サンプルデータ =================
+function sampleData(){
+  const names=["半導体","電気機器","情報通信","医薬品","銀行","自動車","機械","商社","小売","不動産","化学","海運","鉄鋼","食品","サービス"];
+  N=78; dates=[]; let d=new Date(2025,1,7);
+  for(let i=0;i<N;i++){dates.push(new Date(d));d.setDate(d.getDate()+7);}
+  return names.map((name,si)=>{
+    const r=mulberry32(7+si*131);
+    const phase=r()*Math.PI*2,cyc=0.9+r()*0.7,amp=0.05+r()*0.05,drift=(r()-0.5)*0.0009,vol=0.010+r()*0.010;
+    let v=1;const rs=[v];
+    for(let i=1;i<N;i++){v*=1+drift+amp*0.02*Math.sin(phase+i/N*Math.PI*2*cyc)+(r()-0.5)*vol;rs.push(v);}
+    return{name,rs};
+  });
+}
+
+// ================= データ読み込み =================
+async function loadJSON(path){ try{ const r=await fetch(path,{cache:"no-store"}); if(!r.ok)throw 0; return await r.json(); }catch(e){ return null; } }
+
+function computeDerived(){
+  DATA.forEach((s,i)=>{
+    s.color=s.color||PALETTE[i%PALETTE.length];
+    s.ratio=smaNull(s.rs,W).map((m,k)=>m?100*s.rs[k]/m:null);
+    s.mom=s.ratio.map((_,k)=>{const m=smaNull(s.ratio,W)[k];return(s.ratio[k]!=null&&m)?100*s.ratio[k]/m:null;});
+  });
+}
+
+// ================= RRG =================
+const RSZ=560,PAD=40; let tail=6,curWeek=0,playing=false,timer=null;
+function rrgBounds(){let lo=100,hi=100;DATA.forEach(s=>{for(let i=Math.max(0,curWeek-tail);i<=curWeek;i++){[s.ratio[i],s.mom[i]].forEach(v=>{if(v!=null){lo=Math.min(lo,v);hi=Math.max(hi,v);}});}});const sp=Math.max(hi-100,100-lo,1.2)*1.15;return[100-sp,100+sp];}
+function drawRRG(){
+  const[lo,hi]=rrgBounds(),plot=RSZ-PAD*2;
+  const X=v=>PAD+(v-lo)/(hi-lo)*plot, Y=v=>PAD+(1-(v-lo)/(hi-lo))*plot;
+  const mid=X(100),midY=Y(100); let s='';
+  s+=`<rect x="${mid}" y="${PAD}" width="${PAD+plot-mid}" height="${midY-PAD}" fill="var(--lead-bg)"/>`;
+  s+=`<rect x="${mid}" y="${midY}" width="${PAD+plot-mid}" height="${PAD+plot-midY}" fill="var(--weak-bg)"/>`;
+  s+=`<rect x="${PAD}" y="${midY}" width="${mid-PAD}" height="${PAD+plot-midY}" fill="var(--lag-bg)"/>`;
+  s+=`<rect x="${PAD}" y="${PAD}" width="${mid-PAD}" height="${midY-PAD}" fill="var(--improve-bg)"/>`;
+  for(let g=Math.ceil(lo);g<=hi;g++){if(Math.abs(g-100)<.01)continue;
+    s+=`<line class="grid-l" x1="${X(g).toFixed(1)}" x2="${X(g).toFixed(1)}" y1="${PAD}" y2="${PAD+plot}"/>`;
+    s+=`<line class="grid-l" x1="${PAD}" x2="${PAD+plot}" y1="${Y(g).toFixed(1)}" y2="${Y(g).toFixed(1)}"/>`;}
+  s+=`<line class="axis-mid" x1="${mid}" x2="${mid}" y1="${PAD}" y2="${PAD+plot}"/><line class="axis-mid" x1="${PAD}" x2="${PAD+plot}" y1="${midY}" y2="${midY}"/>`;
+  s+=`<rect x="${PAD}" y="${PAD}" width="${plot}" height="${plot}" fill="none" class="axis"/>`;
+  s+=`<text class="tick" x="${PAD}" y="${PAD+plot+14}">${lo.toFixed(0)}</text><text class="tick" x="${PAD+plot}" y="${PAD+plot+14}" text-anchor="end">${hi.toFixed(0)}</text>`;
+  s+=`<text class="qlabel" x="${PAD+plot-6}" y="${PAD+14}" text-anchor="end" fill="var(--lead)">Leading</text>`;
+  s+=`<text class="qlabel" x="${PAD+plot-6}" y="${PAD+plot-8}" text-anchor="end" fill="var(--weak)">Weakening</text>`;
+  s+=`<text class="qlabel" x="${PAD+6}" y="${PAD+plot-8}" fill="var(--lag)">Lagging</text>`;
+  s+=`<text class="qlabel" x="${PAD+6}" y="${PAD+14}" fill="var(--improve)">Improving</text>`;
+  s+=`<text class="tick" x="${PAD+plot/2}" y="${PAD+plot+26}" text-anchor="middle">RS-Ratio →</text>`;
+  DATA.forEach(s0=>{
+    const pts=[];for(let i=Math.max(0,curWeek-tail);i<=curWeek;i++){if(s0.ratio[i]!=null&&s0.mom[i]!=null)pts.push([X(s0.ratio[i]),Y(s0.mom[i])]);}
+    if(!pts.length)return;
+    if(pts.length>1)s+=`<polyline class="trail" points="${pts.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ')}" stroke="${s0.color}"/>`;
+    pts.forEach((p,k)=>{if(k<pts.length-1)s+=`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2" fill="${s0.color}" opacity="${0.2+0.5*k/pts.length}"/>`;});
+    const h=pts[pts.length-1];
+    s+=`<circle class="node" cx="${h[0].toFixed(1)}" cy="${h[1].toFixed(1)}" r="5.5" fill="${s0.color}"><title>${s0.name} · ${quad(s0.ratio[curWeek],s0.mom[curWeek])}\nRatio ${s0.ratio[curWeek]?.toFixed(2)} / Mom ${s0.mom[curWeek]?.toFixed(2)}</title></circle>`;
+    s+=`<text class="node-lbl" x="${(h[0]+8).toFixed(1)}" y="${(h[1]+3.5).toFixed(1)}" fill="${s0.color}">${s0.name}</text>`;
+  });
+  $('rrg').innerHTML=s;
+  const dt=dates[curWeek];
+  $('weekbadge').textContent=`${dt.getFullYear()}/${dt.getMonth()+1}/${dt.getDate()} 時点 (第${curWeek+1}週/${N})`;
+}
+$('play').onclick=()=>{
+  playing=!playing;$('play').textContent=playing?'❚❚ 停止':'▶ 再生';
+  if(playing){if(curWeek>=N-1)curWeek=Math.min(W*2+tail,N-1);
+    timer=setInterval(()=>{curWeek++;if(curWeek>=N-1){curWeek=N-1;drawRRG();clearInterval(timer);playing=false;$('play').textContent='▶ 再生';return;}drawRRG();},260);}
+  else clearInterval(timer);
+};
+$('tail').oninput=e=>{tail=+e.target.value;$('taillen').textContent=tail+'w';drawRRG();};
+
+// ================= アラート & 局面 =================
+function buildAlerts(){
+  const box=$('alerts'),evs=[];
+  DATA.forEach(s=>{
+    const q1=quad(s.ratio[N-1],s.mom[N-1]),q0=quad(s.ratio[N-2],s.mom[N-2]);
+    if(q1&&q0&&q1!==q0)evs.push({name:s.name,from:q0,to:q1,bullish:(q1==="Improving"||q1==="Leading"),strength:Math.abs(s.mom[N-1]-100),mom:s.mom[N-1]});
+  });
+  evs.sort((a,b)=>b.strength-a.strength);
+  if(!evs.length){box.innerHTML='<div class="empty">今週の象限クロスなし</div>';return;}
+  box.innerHTML=evs.map(e=>{
+    const label=e.to==="Improving"?"底打ち初動":e.to==="Leading"?"主導入り":e.to==="Weakening"?"失速初動":"下落継続";
+    return`<div class="alert"><div class="bar" style="background:${QHEX[e.to]}"></div><div style="flex:1">
+      <div class="t">${e.name}<span class="tag2" style="background:${QBG[e.to]};color:${QHEX[e.to]}">${label}</span></div>
+      <div class="m">${e.from} → <b style="color:${QHEX[e.to]}">${e.to}</b> · Mom ${e.mom.toFixed(1)}</div></div></div>`;
+  }).join('');
+}
+function buildRegime(){
+  const c={Leading:0,Weakening:0,Lagging:0,Improving:0};
+  DATA.forEach(s=>{const q=quad(s.ratio[N-1],s.mom[N-1]);if(q)c[q]++;});
+  const tone=(c.Leading+c.Improving)>=(c.Weakening+c.Lagging)?["リスクオン","var(--lead)"]:["リスクオフ","var(--lag)"];
+  const dt=dates[N-1];
+  $('regime').innerHTML=`<span class="chip"><span class="dot-s" style="background:${tone[1]}"></span><b>${tone[0]}</b> 局面</span>`+
+    Object.entries(c).map(([q,n])=>`<span class="chip"><span class="dot-s" style="background:${QHEX[q]}"></span>${q} <b>${n}</b></span>`).join('')+
+    `<span class="chip">as of <b>${dt.getFullYear()}/${dt.getMonth()+1}/${dt.getDate()}</b></span>`;
+}
+
+// ================= 相対力ライン =================
+const hidden=new Set();
+function drawLines(){
+  const LW=1160,LH=380,LP={l:40,r:120,t:16,b:26};
+  const M=Math.min(26,N),start=N-M;
+  const ser=DATA.map(s=>{const base=s.rs[start];return{...s,pts:s.rs.slice(start).map(x=>(x/base-1)*100)};});
+  const vis=ser.filter(s=>!hidden.has(s.name));
+  let lo=0,hi=0;vis.forEach(s=>s.pts.forEach(v=>{lo=Math.min(lo,v);hi=Math.max(hi,v);}));
+  const pad=(hi-lo)*.08||1;lo-=pad;hi+=pad;
+  const iw=LW-LP.l-LP.r,ih=LH-LP.t-LP.b;
+  const X=i=>LP.l+i/(M-1)*iw,Y=v=>LP.t+(1-(v-lo)/(hi-lo))*ih;
+  let g='';
+  const range=hi-lo;let step=Math.pow(10,Math.floor(Math.log10(range/5)));[1,2,2.5,5,10].some(m=>{if(range/(step*m)<=6){step*=m;return true;}});
+  for(let gv=Math.ceil(lo/step)*step;gv<=hi;gv+=step){const yy=Y(gv).toFixed(1),z=Math.abs(gv)<1e-9;
+    g+=`<line class="${z?'zeroline':'grln'}" x1="${LP.l}" x2="${LP.l+iw}" y1="${yy}" y2="${yy}"/>`;
+    g+=`<text class="ltick" x="${LP.l-7}" y="${+yy+3}" text-anchor="end">${gv>0?'+':''}${gv.toFixed(0)}%</text>`;}
+  for(let t=0;t<=5;t++){const i=Math.round(t/5*(M-1)),dt=dates[start+i];g+=`<text class="ltick" x="${X(i).toFixed(1)}" y="${LH-8}" text-anchor="middle">${dt.getMonth()+1}/${dt.getDate()}</text>`;}
+  let ends=[];
+  ser.forEach(s=>{const off=hidden.has(s.name);
+    g+=`<path class="series ${off?'dim':''}" data-nm="${s.name}" d="${s.pts.map((v,i)=>`${i?'L':'M'}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join('')}" stroke="${s.color}"/>`;
+    if(!off)ends.push({name:s.name,color:s.color,v:s.pts[s.pts.length-1],y:Y(s.pts[s.pts.length-1])});});
+  ends.sort((a,b)=>a.y-b.y);for(let i=1;i<ends.length;i++)if(ends[i].y-ends[i-1].y<14)ends[i].y=ends[i-1].y+14;
+  ends.forEach(e=>{g+=`<g class="rtag"><rect x="${LP.l+iw+6}" y="${(e.y-8).toFixed(1)}" width="108" height="16" fill="${e.color}"/><text x="${LP.l+iw+11}" y="${(e.y+3.5).toFixed(1)}">${e.name}</text><text x="${LP.l+iw+108}" y="${(e.y+3.5).toFixed(1)}" text-anchor="end">${(e.v>=0?'+':'')+e.v.toFixed(1)}%</text></g>`;});
+  $('lines').innerHTML=g;
+}
+function buildLegend(){
+  const M=Math.min(26,N),start=N-M,lg=$('lg');lg.innerHTML='';
+  DATA.forEach(s=>{const last=(s.rs[N-1]/s.rs[start]-1)*100;
+    const el=document.createElement('div');
+    el.style.cssText='display:flex;align-items:center;gap:7px;padding:4px 6px;border-radius:6px;cursor:pointer'+(hidden.has(s.name)?';opacity:.38':'');
+    el.innerHTML=`<span style="width:9px;height:9px;border-radius:2px;background:${s.color}"></span><span style="font-size:12px;flex:1">${s.name}</span><span style="font-family:var(--mono);font-size:11px;color:${last>=0?'var(--lead)':'var(--lag)'}">${(last>=0?'+':'')+last.toFixed(1)}%</span>`;
+    el.onmouseenter=()=>{el.style.background='var(--panel-2)';document.querySelectorAll('#lines .series').forEach(p=>{if(p.dataset.nm!==s.name&&!hidden.has(p.dataset.nm))p.classList.add('dim');});};
+    el.onmouseleave=()=>{el.style.background='';document.querySelectorAll('#lines .series').forEach(p=>{if(!hidden.has(p.dataset.nm))p.classList.remove('dim');});};
+    el.onclick=()=>{hidden.has(s.name)?hidden.delete(s.name):hidden.add(s.name);drawLines();buildLegend();};
+    lg.appendChild(el);});
+}
+
+// ================= スコアボード =================
+let sortK='ratio',sortDir=-1;
+function buildTable(){
+  const rows=DATA.map(s=>({name:s.name,color:s.color,quad:quad(s.ratio[N-1],s.mom[N-1]),
+    ratio:s.ratio[N-1],mom:s.mom[N-1],
+    r1:(s.rs[N-1]/s.rs[N-2]-1)*100,r4:(s.rs[N-1]/s.rs[N-5]-1)*100,
+    r13:N>14?(s.rs[N-1]/s.rs[N-14]-1)*100:0}));
+  const order={Leading:0,Improving:1,Weakening:2,Lagging:3};
+  rows.sort((a,b)=>{let av=a[sortK],bv=b[sortK];if(sortK==='quad'){av=order[av];bv=order[bv];}if(sortK==='name')return a.name.localeCompare(b.name,'ja')*sortDir;return(av-bv)*sortDir;});
+  document.querySelector('#tbl tbody').innerHTML=rows.map(r=>`<tr>
+    <td><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${r.color};margin-right:7px"></span>${r.name}</td>
+    <td style="text-align:right"><span class="qpill" style="background:${QBG[r.quad]};color:${QHEX[r.quad]}">${r.quad}</span></td>
+    <td style="text-align:right;color:${r.ratio>=100?'var(--lead)':'var(--lag)'}">${r.ratio.toFixed(2)}</td>
+    <td style="text-align:right;color:${r.mom>=100?'var(--lead)':'var(--lag)'}">${r.mom.toFixed(2)}</td>
+    <td style="text-align:right" class="${r.r1>=0?'num-pos':'num-neg'}">${(r.r1>=0?'+':'')+r.r1.toFixed(2)}%</td>
+    <td style="text-align:right" class="${r.r4>=0?'num-pos':'num-neg'}">${(r.r4>=0?'+':'')+r.r4.toFixed(2)}%</td>
+    <td style="text-align:right" class="${r.r13>=0?'num-pos':'num-neg'}">${(r.r13>=0?'+':'')+r.r13.toFixed(2)}%</td>
+  </tr>`).join('');
+}
+document.querySelectorAll('#tbl th').forEach(th=>{th.onclick=()=>{const k=th.dataset.k;if(k===sortK)sortDir*=-1;else{sortK=k;sortDir=k==='name'?1:-1;}buildTable();};});
+
+// ================= 週次ブリーフ =================
+const SAMPLE_BRIEF={
+  issue:"サンプル表示 / データ接続前",
+  headline:["これはサンプルのブリーフです。実データ接続後は、市場統計から「","週次総括","」がClaude APIで自動生成されます。"],
+  conclusion_title:"結論: サンプル(構造の確認用)",
+  conclusions:[
+    {tag:"需要",cls:"demand",text:"pipeline/fetch_data.py を実行すると実データの騰落率・相対力がこのページに流れ込みます。"},
+    {tag:"株価",cls:"price",text:"pipeline/generate_brief.py がClaude APIを呼び、この文章部分を毎週自動生成します。"},
+    {tag:"ローテ",cls:"rot",text:"RRGの象限変化(トレンド転換)がブリーフの根拠データとして使われます。"}],
+  table_note:"実データ接続後は、<b>等ウェイトと時価総額ウェイトの差</b>から大型株への集中/分散が読めます。",
+  scenarios:[
+    {k:"基本線",cls:"base",v:"構造確認",d:"サンプル。実運用ではデータに基づく最有力シナリオが入ります。"},
+    {k:"強気",cls:"bull",v:"自動生成",d:"強気に転じる条件と確認ポイントが入ります。"},
+    {k:"弱気",cls:"bear",v:"自動生成",d:"警戒すべき条件とトリガーが入ります。"}],
+  event_title:"イベント: 実データ接続後に翌週の経済指標が入ります",
+  events:[{date:"—",text:"generate_brief.py が翌週の<b>日米の主要指標・決算</b>を挙げます"}],
+  risk:{head:"リスクシナリオ(自動生成)",body:"データ上の弱点(例: <b>大型株への売り集中</b>)から最大リスクを特定して記述します。"}};
+
+function renderBrief(b){
+  $('b-issue').textContent=b.issue||'';
+  $('b-headline').innerHTML=`${b.headline[0]}<em>${b.headline[1]}</em>${b.headline[2]}`;
+  $('b-concl-title').textContent=b.conclusion_title;
+  $('b-conclusions').innerHTML=b.conclusions.map(c=>`<div class="concl"><span class="btag ${c.cls}">${c.tag}</span><p>${c.text}</p></div>`).join('');
+  const fmt=v=>v==null?'n/a':(v>=0?'+':'')+v.toFixed(2)+'%';
+  const readOf=r=>{
+    if(r.ew==null||r.cw==null)return'—';
+    if(r.cw<r.ew-0.4)return'大型株に売りが集中';
+    if(r.cw>r.ew+0.4)return'大型株が相対的に強い';
+    return r.ew>=0?'幅広く買われた':'幅広く売られた';};
+  const rows=briefTable&&briefTable.length?briefTable:[
+    {name:"日本 半導体関連",ew:-3.89,cw:-6.57},{name:"米国 半導体関連",ew:-2.40,cw:-4.10},
+    {name:"米国 Growth",ew:-0.80,cw:-2.19},{name:"米国 Value",ew:0.46,cw:0.90}];
+  $('b-tbl').innerHTML=rows.map(r=>`<tr>
+    <td style="font-weight:600">${r.name}</td>
+    <td class="num" style="color:${(r.ew??0)>=0?'var(--lead)':'var(--lag)'}">${fmt(r.ew)}</td>
+    <td class="num" style="color:${(r.cw??0)>=0?'var(--lead)':'var(--lag)'}">${fmt(r.cw)}</td>
+    <td class="read">${readOf(r)}</td></tr>`).join('');
+  $('b-note').innerHTML=b.table_note||b.note||'';
+  $('b-scen').innerHTML=b.scenarios.map(s=>`<div class="scenbox ${s.cls}"><div class="k">${s.k}</div><div class="v">${s.v}</div><div class="d">${s.d}</div></div>`).join('');
+  $('b-evt-title').textContent=b.event_title;
+  $('b-events').innerHTML=b.events.map(e=>`<div class="evt"><span class="date">${e.date}</span><span class="txt">${e.text}</span></div>`).join('');
+  $('b-risk-h').textContent=b.risk.head;$('b-risk-b').innerHTML=b.risk.body;
+}
+
+// ================= ナビ =================
+document.querySelectorAll('nav button').forEach(b=>{b.onclick=()=>{
+  document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id==='v-'+b.dataset.v));};});
+
+// ================= 起動 =================
+(async()=>{
+  const md=await loadJSON('data/market_data.json');
+  if(md&&md.sectors&&md.sectors.length){
+    isLive=true;
+    dates=md.dates.map(d=>new Date(d));N=dates.length;
+    DATA=md.sectors.map(s=>({name:s.name,rs:s.rs}));
+    briefTable=md.brief_table||null;
+    $('datachip').innerHTML=`<span class="dot-s" style="background:var(--lead)"></span>実データ · ${md.generated_at?.slice(0,10)||''}`;
+  }else{
+    DATA=sampleData();
+    $('datachip').innerHTML=`<span class="dot-s" style="background:var(--weak)"></span>サンプルデータ`;
+  }
+  computeDerived();
+  curWeek=N-1;
+  drawRRG();buildAlerts();buildRegime();drawLines();buildLegend();buildTable();
+  const bf=await loadJSON('data/brief.json');
+  renderBrief(bf&&bf.headline?bf:SAMPLE_BRIEF);
+  $('foot').innerHTML=`※ 本サイトは情報整理・学習目的であり投資助言ではありません。RS-Ratio＝相対力(業種/TOPIX)の${W}週平均比、RS-Mom＝Ratioの${W}週モメンタム。<br>データ更新: pipeline/fetch_data.py → generate_brief.py → 本ページが data/*.json を読み込み(ローカル表示は python -m http.server 推奨)`;
+})();
+</script>
