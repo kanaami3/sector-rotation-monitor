@@ -145,7 +145,7 @@
     <div class="mgrid">
       <div class="card">
         <h2>相対ローテーショングラフ（RRG）</h2>
-        <p class="desc">横軸＝相対力、縦軸＝相対モメンタム(対TOPIX)。業種は中心を基準に<b>時計回り</b>に循環。尾は過去の軌跡。</p>
+        <p class="desc">横軸＝相対力、縦軸＝相対モメンタム(対TOPIX)。業種は中心を基準に<b>時計回り</b>に循環。尾は過去の軌跡。<span style="color:var(--muted)">※週次（毎週金曜締め）のため最終点は次の金曜まで更新されません。</span></p>
         <div class="rrg-tools">
           <button class="playbtn" id="play">▶ 再生</button>
           <div class="slider">尾 <input type="range" id="tail" min="1" max="12" value="6"><span id="taillen">6w</span></div>
@@ -221,7 +221,7 @@ const QHEX={Leading:"#2FBF71",Weakening:"#E0A72E",Lagging:"#E4536A",Improving:"#
 const QBG={Leading:"var(--lead-bg)",Weakening:"var(--weak-bg)",Lagging:"var(--lag-bg)",Improving:"var(--improve-bg)"};
 const $=id=>document.getElementById(id);
 const W=10; // 平滑化窓(週)
-let DATA=[], dates=[], N=0, isLive=false, briefTable=null;
+let DATA=[], dates=[], N=0, isLive=false, briefTable=null, asOf='';
 
 // ================= サンプルデータ =================
 function sampleData(){
@@ -281,7 +281,10 @@ function drawRRG(){
   });
   $('rrg').innerHTML=s;
   const dt=dates[curWeek];
-  $('weekbadge').textContent=`${dt.getFullYear()}/${dt.getMonth()+1}/${dt.getDate()} 時点 (第${curWeek+1}週/${N})`;
+  const dstr=`${dt.getFullYear()}/${dt.getMonth()+1}/${dt.getDate()}`;
+  $('weekbadge').textContent = (curWeek===N-1 && asOf)
+    ? `最新確定週 ${dstr} · 取得 ${asOf}`
+    : `${dstr} 時点 (第${curWeek+1}週/${N})`;
 }
 $('play').onclick=()=>{
   playing=!playing;$('play').textContent=playing?'❚❚ 停止':'▶ 再生';
@@ -432,7 +435,8 @@ document.querySelectorAll('nav button').forEach(b=>{b.onclick=()=>{
     dates=md.dates.map(d=>new Date(d));N=dates.length;
     DATA=md.sectors.map(s=>({name:s.name,rs:s.rs}));
     briefTable=md.brief_table||null;
-    $('datachip').innerHTML=`<span class="dot-s" style="background:var(--lead)"></span>実データ · ${md.generated_at?.slice(0,10)||''}`;
+    asOf=md.generated_at?.slice(0,10)||'';
+    $('datachip').innerHTML=`<span class="dot-s" style="background:var(--lead)"></span>実データ · ${asOf}`;
   }else{
     DATA=sampleData();
     $('datachip').innerHTML=`<span class="dot-s" style="background:var(--weak)"></span>サンプルデータ`;
