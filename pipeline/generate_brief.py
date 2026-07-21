@@ -65,11 +65,7 @@ def summarize_market() -> str:
     return "\n".join(lines)
 
 
-def main():
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise SystemExit("環境変数 ANTHROPIC_API_KEY を設定してください")
-
+def generate(api_key: str) -> dict:
     stats = summarize_market()
     today = datetime.now().strftime("%Y-%m-%d")
 
@@ -96,16 +92,34 @@ def main():
         },
         json={
             "model": "claude-sonnet-4-6",
-            "max_tokens": 2500,
+            "max_tokens": 4000,
             "messages": [{"role": "user", "content": prompt}],
         },
         timeout=120,
     )
     resp.raise_for_status()
-    text = "".join(b.get("text", "") for b in resp.json()["content"])
+    body = resp.json()
+    if body.get("stop_reason") == "max_tokens":
+        raise ValueError("応答がmax_tokensで打ち切られました(JSON不完全)")
+    text = "".join(b.get("text", "") for b in body["content"])
     text = text.replace("```json", "").replace("```", "").strip()
     brief = json.loads(text)
     brief["generated_at"] = datetime.now().isoformat(timespec="seconds")
+    return brief
+
+
+def main():
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise SystemExit("環境変数 ANTHROPIC_API_KEY を設定してください")
+
+    # ブリーフ生成が失敗しても、データ更新パイプライン全体は止めない。
+    # 既存の brief.json を残して正常終了する(データのcommitを守るため)。
+    try:
+        brief = generate(api_key)
+    except Exception as e:  # noqa: BLE001
+        print(f"警告: ブリーフ生成に失敗しました({e})。既存のbrief.jsonを維持します。")
+        return
 
     OUT.write_text(json.dumps(brief, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"完了: {OUT}")
