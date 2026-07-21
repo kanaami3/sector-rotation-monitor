@@ -80,6 +80,15 @@
   .qpill{font-size:9.5px;padding:2px 7px;border-radius:20px;font-weight:600;font-family:var(--mono)}
   .num-pos{color:var(--lead)}.num-neg{color:var(--lag)}
 
+  /* ---- deviation ranking ---- */
+  .secchips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 16px}
+  .secchips button{font-size:12px;font-weight:600;color:var(--muted);background:var(--panel-2);border:1px solid var(--line);border-radius:20px;padding:6px 13px;cursor:pointer;transition:.12s}
+  .secchips button:hover{color:var(--text);border-color:var(--accent)}
+  .secchips button.on{color:var(--text);background:var(--panel);box-shadow:inset 0 -2px 0 var(--accent)}
+  .secchips button span{color:var(--muted-2);font-size:10.5px;margin-left:3px}
+  .devbar{display:inline-block;height:8px;border-radius:2px;vertical-align:middle}
+  .rank{color:var(--muted-2)}
+
   /* ---- brief ---- */
   .masthead{display:flex;align-items:flex-start;gap:16px;justify-content:space-between;flex-wrap:wrap;margin-bottom:20px}
   .eyebrow{display:inline-block;font-size:13px;font-weight:600;padding:6px 14px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2)}
@@ -134,6 +143,7 @@
       <button data-v="monitor" class="on">ローテーション監視</button>
       <button data-v="brief">週次ブリーフ</button>
       <button data-v="board">スコアボード</button>
+      <button data-v="deviation">乖離ランキング</button>
     </nav>
     <div class="spacer"></div>
     <div class="datachip" id="datachip"><span class="dot-s" style="background:var(--muted-2)"></span>読み込み中…</div>
@@ -205,6 +215,16 @@
         <th data-k="ratio">RS-Ratio</th><th data-k="mom">RS-Mom</th>
         <th data-k="r1">1週(相対)</th><th data-k="r4">4週(相対)</th><th data-k="r13">13週(相対)</th>
       </tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+
+  <!-- ============ DEVIATION RANKING ============ -->
+  <div class="view" id="v-deviation">
+    <div class="card">
+      <h2>セクター別 移動平均乖離率ランキング</h2>
+      <p class="desc">各業種で <b>25日移動平均からの乖離</b> が大きい主要銘柄トップ50。<span class="num-pos">プラス＝買われすぎ</span> / <span class="num-neg">マイナス＝売られすぎ</span>。参考に75日乖離も表示。<span style="color:var(--muted)">※yfinanceの主要銘柄ユニバース内・当日終値ベース。全上場ではありません。</span></p>
+      <div class="secchips" id="dev-secs"></div>
+      <div id="dev-body"></div>
     </div>
   </div>
 
@@ -422,6 +442,35 @@ function renderBrief(b){
   $('b-risk-h').textContent=b.risk.head;$('b-risk-b').innerHTML=b.risk.body;
 }
 
+// ================= 乖離ランキング =================
+let DEV=null, devSec=0;
+function renderDevSecs(){
+  const box=$('dev-secs');
+  box.innerHTML=DEV.sectors.map((s,i)=>`<button class="${i===devSec?'on':''}" data-i="${i}">${s.name}<span>${s.count}</span></button>`).join('');
+  box.querySelectorAll('button').forEach(b=>b.onclick=()=>{devSec=+b.dataset.i;renderDevSecs();renderDevTable();});
+}
+function renderDevTable(){
+  const s=DEV.sectors[devSec],pk='dev'+DEV.primary_ma;
+  if(!s||!s.stocks.length){$('dev-body').innerHTML='<div class="empty">該当銘柄なし</div>';return;}
+  const maxAbs=Math.max(1,...s.stocks.map(r=>Math.abs(r[pk]??0)));
+  const rows=s.stocks.map((r,i)=>{
+    const d=r[pk]??0,pos=d>=0,w=Math.round(Math.abs(d)/maxAbs*80);
+    const d75=r.dev75!=null?((r.dev75>=0?'+':'')+r.dev75.toFixed(1)+'%'):'—';
+    return`<tr>
+      <td class="rank">${i+1}</td>
+      <td><span style="color:var(--muted-2);font-size:11px">${r.code}</span> <span style="font-family:var(--sans)">${r.name}</span></td>
+      <td style="text-align:right">${r.close.toLocaleString()}</td>
+      <td style="text-align:right" class="${pos?'num-pos':'num-neg'}">${(pos?'+':'')+d.toFixed(1)}%</td>
+      <td><span class="devbar" style="width:${w}px;background:${pos?'var(--lead)':'var(--lag)'}"></span></td>
+      <td style="text-align:right;color:var(--muted)">${d75}</td>
+    </tr>`;}).join('');
+  $('dev-body').innerHTML=`<table><thead><tr>
+    <th style="text-align:left;cursor:default">#</th><th style="text-align:left;cursor:default">銘柄</th>
+    <th style="cursor:default">終値</th><th style="cursor:default">${DEV.primary_ma}日乖離</th>
+    <th style="cursor:default"></th><th style="cursor:default">75日乖離</th>
+  </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
 // ================= ナビ =================
 document.querySelectorAll('nav button').forEach(b=>{b.onclick=()=>{
   document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));
@@ -446,6 +495,9 @@ document.querySelectorAll('nav button').forEach(b=>{b.onclick=()=>{
   drawRRG();buildAlerts();buildRegime();drawLines();buildLegend();buildTable();
   const bf=await loadJSON('data/brief.json');
   renderBrief(bf&&bf.headline?bf:SAMPLE_BRIEF);
+  DEV=await loadJSON('data/deviation.json');
+  if(DEV&&DEV.sectors&&DEV.sectors.length){renderDevSecs();renderDevTable();}
+  else{$('dev-body').innerHTML='<div class="empty">乖離データ未生成(pipeline/fetch_deviation.py を実行)</div>';}
   $('foot').innerHTML=`※ 本サイトは情報整理・学習目的であり投資助言ではありません。RS-Ratio＝相対力(業種/TOPIX)の${W}週平均比、RS-Mom＝Ratioの${W}週モメンタム。<br>データ更新: pipeline/fetch_data.py → generate_brief.py → 本ページが data/*.json を読み込み(ローカル表示は python -m http.server 推奨)`;
 })();
 </script>

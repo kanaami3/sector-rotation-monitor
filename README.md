@@ -7,14 +7,17 @@ RRG(相対ローテーショングラフ) + トレンド転換アラート + 週
 
 ```
 site/
-├── index.html                  # サイト本体(3ページ統合・data/*.json を読み込み)
+├── index.html                  # サイト本体(4ページ統合・data/*.json を読み込み)
 ├── data/
 │   ├── market_data.json        # fetch_data.py が出力(相対力・騰落率)
+│   ├── deviation.json          # fetch_deviation.py が出力(移動平均乖離率ランキング)
 │   └── brief.json              # generate_brief.py が出力(週次総括)
 ├── pipeline/
 │   ├── fetch_data.py           # yfinanceで日本14業種バスケット取得→RS計算
+│   ├── fetch_deviation.py      # 主要銘柄の25日/75日移動平均乖離率→セクター別ランキング
+│   ├── universe.py             # セクター別 主要銘柄ユニバース(乖離ランキング用)
 │   └── generate_brief.py       # Claude APIで週次ブリーフ生成
-└── .github/workflows/update.yml # 平日朝の自動更新
+└── .github/workflows/update.yml # 毎日朝の自動更新
 ```
 
 ## ローカルで動かす

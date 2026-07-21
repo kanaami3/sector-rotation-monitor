@@ -25,6 +25,9 @@ jobs:
       - name: Fetch market data
         run: python pipeline/fetch_data.py
 
+      - name: Fetch sector deviation ranking
+        run: python pipeline/fetch_deviation.py || echo "乖離データ取得に失敗(既存を維持して続行)"
+
       - name: Generate weekly brief (月曜または手動実行時)
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
