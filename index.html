@@ -222,7 +222,7 @@
   <div class="view" id="v-deviation">
     <div class="card">
       <h2>セクター別 移動平均乖離率ランキング</h2>
-      <p class="desc">各業種で <b>25日移動平均からの乖離</b> が大きい主要銘柄トップ50。<span class="num-pos">プラス＝買われすぎ</span> / <span class="num-neg">マイナス＝売られすぎ</span>。参考に75日乖離も表示。<span style="color:var(--muted)">※yfinanceの主要銘柄ユニバース内・当日終値ベース。全上場ではありません。</span></p>
+      <p class="desc">各業種で <b>25日移動平均からの乖離</b> が大きい主要銘柄トップ50。<span class="num-pos">プラス＝買われすぎ</span> / <span class="num-neg">マイナス＝売られすぎ</span>。参考に75日乖離・PER・PBR・配当利回りも表示。<span style="color:var(--muted)">※yfinanceの主要銘柄ユニバース内・当日終値ベース。全上場ではありません。PER/PBR/配当は取得できない銘柄は「—」。</span></p>
       <div class="secchips" id="dev-secs"></div>
       <div id="dev-body"></div>
     </div>
@@ -453,6 +453,7 @@ function renderDevTable(){
   const s=DEV.sectors[devSec],pk='dev'+DEV.primary_ma;
   if(!s||!s.stocks.length){$('dev-body').innerHTML='<div class="empty">該当銘柄なし</div>';return;}
   const maxAbs=Math.max(1,...s.stocks.map(r=>Math.abs(r[pk]??0)));
+  const fmt=(v,suf='')=>v==null?'—':(v.toLocaleString()+suf);
   const rows=s.stocks.map((r,i)=>{
     const d=r[pk]??0,pos=d>=0,w=Math.round(Math.abs(d)/maxAbs*80);
     const d75=r.dev75!=null?((r.dev75>=0?'+':'')+r.dev75.toFixed(1)+'%'):'—';
@@ -463,11 +464,15 @@ function renderDevTable(){
       <td style="text-align:right" class="${pos?'num-pos':'num-neg'}">${(pos?'+':'')+d.toFixed(1)}%</td>
       <td><span class="devbar" style="width:${w}px;background:${pos?'var(--lead)':'var(--lag)'}"></span></td>
       <td style="text-align:right;color:var(--muted)">${d75}</td>
+      <td style="text-align:right">${fmt(r.per)}</td>
+      <td style="text-align:right">${fmt(r.pbr)}</td>
+      <td style="text-align:right">${fmt(r.divy,'%')}</td>
     </tr>`;}).join('');
   $('dev-body').innerHTML=`<table><thead><tr>
     <th style="text-align:left;cursor:default">#</th><th style="text-align:left;cursor:default">銘柄</th>
     <th style="cursor:default">終値</th><th style="cursor:default">${DEV.primary_ma}日乖離</th>
     <th style="cursor:default"></th><th style="cursor:default">75日乖離</th>
+    <th style="cursor:default">PER</th><th style="cursor:default">PBR</th><th style="cursor:default">配当利回り</th>
   </tr></thead><tbody>${rows}</tbody></table>`;
 }
 

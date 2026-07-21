@@ -43,6 +43,39 @@ def download_closes(tickers: list[str], period: str = "6mo") -> pd.DataFrame:
     return pd.DataFrame(out)
 
 
+def _rnd(v, nd):
+    """None/NaN/異常値を弾いて丸める。"""
+    try:
+        if v is None:
+            return None
+        v = float(v)
+        if v != v or abs(v) > 1e7:     # NaN / 異常値
+            return None
+        return round(v, nd)
+    except (TypeError, ValueError):
+        return None
+
+
+def fetch_fundamentals(codes: list[str]) -> dict:
+    """各銘柄の PER(実績)・PBR・配当利回り(%)・1株配当(円) を取得。
+    yfinance の .info は1銘柄ずつのため時間がかかる。取れない値は None。"""
+    out = {}
+    for n, code in enumerate(codes, 1):
+        try:
+            i = yf.Ticker(f"{code}.T").info
+            out[code] = {
+                "per": _rnd(i.get("trailingPE"), 1),
+                "pbr": _rnd(i.get("priceToBook"), 2),
+                "divy": _rnd(i.get("dividendYield"), 2),   # 既に%表記
+                "dps": _rnd(i.get("dividendRate"), 0),      # 1株あたり年間配当(円)
+            }
+        except Exception:
+            out[code] = {}
+        if n % 50 == 0:
+            print(f"  ファンダ取得 {n}/{len(codes)}")
+    return out
+
+
 def main():
     pairs = all_pairs()                       # [(sector, code, name), ...]
     name_map = {code: name for _, code, name in pairs}
@@ -77,6 +110,12 @@ def main():
             "close": round(close, 1),
             **devs,
         })
+
+    # PER/PBR/配当を付与(乖離が算出できた銘柄のみ)
+    print(f"ファンダメンタルズ取得: {len(records)}銘柄")
+    fund = fetch_fundamentals([r["code"] for r in records])
+    for r in records:
+        r.update(fund.get(r["code"], {}))
 
     # 業種ごとに |主指標乖離| の大きい順トップN
     primary_key = f"dev{PRIMARY_MA}"
