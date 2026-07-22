@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <defs>
+    <clipPath id="r"><rect x="0" y="0" width="32" height="32" rx="9"/></clipPath>
+  </defs>
+  <g clip-path="url(#r)">
+    <!-- RRG quadrants: improving(blue) leading(green) / lagging(red) weakening(amber) -->
+    <rect x="0"  y="0"  width="16" height="16" fill="#5B8DEF"/>
+    <rect x="16" y="0"  width="16" height="16" fill="#2FBF71"/>
+    <rect x="0"  y="16" width="16" height="16" fill="#E4536A"/>
+    <rect x="16" y="16" width="16" height="16" fill="#E0A72E"/>
+  </g>
+  <rect x="9" y="9" width="14" height="14" rx="3" fill="#070A11"/>
+</svg>
