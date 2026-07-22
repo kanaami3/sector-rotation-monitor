@@ -2,8 +2,9 @@ name: Update market data & brief
 
 on:
   schedule:
-    # 毎日 日本時間 7:30 (UTC 22:30 前日) に実行
-    - cron: "30 22 * * *"
+    # 平日 日本時間 7:07 (UTC 22:07 前日) に実行
+    # UTC 日〜木(0-4) = JST 月〜金。:00/:30 はGitHubの混雑で遅延しやすいため :07 に設定
+    - cron: "7 22 * * 0-4"
   workflow_dispatch:   # 手動実行も可
 
 permissions:
