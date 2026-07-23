@@ -213,7 +213,7 @@
   <div class="view" id="v-board">
     <div class="card">
       <h2>業種スコアボード</h2>
-      <p class="desc">RRG座標・象限・相対リターン。列見出しクリックで並べ替え。</p>
+      <p class="desc">RRG座標・象限・相対リターン。<b>初期表示はRS-Mom（勢い）の高い順＝近く上昇しそうな業種が上位</b>。列見出しクリックで並べ替え。</p>
       <table id="tbl"><thead><tr>
         <th data-k="name">業種</th><th data-k="quad">象限</th>
         <th data-k="ratio">RS-Ratio</th><th data-k="mom">RS-Mom</th>
@@ -382,7 +382,7 @@ function buildLegend(){
 }
 
 // ================= スコアボード =================
-let sortK='ratio',sortDir=-1;
+let sortK='mom',sortDir=-1;
 function buildTable(){
   const rows=DATA.map(s=>({name:s.name,color:s.color,quad:quad(s.ratio[N-1],s.mom[N-1]),
     ratio:s.ratio[N-1],mom:s.mom[N-1],
