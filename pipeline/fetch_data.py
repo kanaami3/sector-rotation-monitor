@@ -1,18 +1,3 @@
-"""
-セクターローテーション監視 — データ取得パイプライン
-=====================================================
-yfinanceで日本の業種代表銘柄バスケットを取得し、
-TOPIX比の相対力(週次)とRRG座標、騰落率テーブルを計算して
-site/data/market_data.json を出力する。
-
-使い方:
-    pip install yfinance pandas
-    python pipeline/fetch_data.py
-
-※ 本格運用でJ-Quants API(東証33業種指数)に差し替える場合は
-   build_sector_series() の中身だけ置き換えればよい。
-"""
-
 import json
 from datetime import datetime
 from pathlib import Path
@@ -65,11 +50,16 @@ def download_closes(tickers: list[str], period: str = "2y") -> pd.DataFrame:
 
 
 def build_sector_series() -> tuple[pd.DataFrame, pd.Series]:
-    """業種ごとの週次指数(等ウェイト)とTOPIX週次終値を返す。"""
+    """業種ごとの日次指数(等ウェイト)とTOPIX日次終値を返す。
+
+    旧: daily.resample("W-FRI").last() で週足に丸めていたが、
+    セクターローテーションを日次粒度で追えるようにするため
+    リサンプルを廃止し、日足の終値をそのまま使用する。
+    """
     all_tickers = sorted({t for ts in SECTOR_BASKETS.values() for t in ts} | {BENCHMARK})
     print(f"日次データ取得: {len(all_tickers)}銘柄")
     daily = download_closes(all_tickers)
-    weekly = daily.resample("W-FRI").last().dropna(how="all")
+    weekly = daily.dropna(how="all")  # 変数名は既存コードとの互換のため維持(中身は日次)
 
     sectors = {}
     for name, ts in SECTOR_BASKETS.items():
@@ -83,7 +73,7 @@ def build_sector_series() -> tuple[pd.DataFrame, pd.Series]:
 
 
 def calc_brief_table(lookback: int = 5) -> list[dict]:
-    """等ウェイト/時価総額ウェイト騰落率(直近1週)。"""
+    """等ウェイト/時価総額ウェイト騰落率(直近5営業日)。"""
     rows = []
     for name, ts in BRIEF_GROUPS.items():
         prices = download_closes(ts, period="3mo")
@@ -127,7 +117,7 @@ def main():
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
-    print(f"完了: {OUT} ({len(idx)}週 × {len(sectors.columns)}業種)")
+    print(f"完了: {OUT} ({len(idx)}日 × {len(sectors.columns)}業種)")
 
 
 if __name__ == "__main__":
