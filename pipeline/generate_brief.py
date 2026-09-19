@@ -97,7 +97,7 @@ def generate(api_key: str) -> dict:
         },
         timeout=120,
     )
-    resp.raise_for_status()
+    if not resp.ok: raise ValueError(f"API {resp.status_code}: {resp.text[:1000]}")
     body = resp.json()
     if body.get("stop_reason") == "max_tokens":
         raise ValueError("応答がmax_tokensで打ち切られました(JSON不完全)")
